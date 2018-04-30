@@ -1,0 +1,126 @@
+
+nyse= load 'NYSE_dividends' as (exchange:chararray, symbol:chararray, date:chararray, profits:double);
+
+nyse= load 'NYSE_dividends' as (exchange, symbol, date, profits);
+
+
+lines = load 'numdata.csv' using PigStorage(',');
+
+
+
+FILTERED OPERATION 
+=======================
+
+nyse_filtered= filter nyse by profits > 0.3;
+>
+>=
+<=
+
+
+
+=====================
+LOWER CASE
+=====================
+
+nyse_lower= foreach  nyse generate LOWER(symbol);
+
+==============================================================
+nyse_daily = LOAD 'NYSE_daily' as (exchange, symbol, date, open, high, low, close, volume, adj_close);
+
+input_all = FOREACH nyse_daily GENERATE *;
+
+input_all = FOREACH nyse_daily GENERATE exchange, symbol;
+
+======
+
+Doing the same thing as above using index operators===============
+
+nyse_daily = LOAD 'NYSE_daily' ;
+
+
+input_all = FOREACH input_prices GENERATE $1,$2
+
+=======SELECTIVELY LOADING====================
+
+ 
+firstfew = foreach nyse_daily generate ..$2;
+middle = foreach nyse_daily generate $3..$5, $7..$8;
+lastfew= foreach nyse_daily generate $6..;
+
+
+
+price_change = foreach nyse_daily generate $6 -$3 AS close_open, $5 -$4 AS high_low;
+price change 
+
+
+
+
+
+
+
+============STORE INTO a folder==================
+store firstfew into '/home/hduser/newpig'
+
+Note: The destination file has to be local file system if pig is working in local mode.
+
+
+
+===========GROUP BY OPERATION===============
+
+input_daily= LOAD 'NYSE_dividends' AS (exchange, stock, date, dividends);
+
+grouped = GROUP input_daily BY (stock);
+
+=====COUNTING=====
+cnt= FOREACH grouped GENERATE group, COUNT(input_daily);
+
+
+
+
+=========AVERAGE ============
+
+avgdividend= FOREACH grouped GENERATE group AS mygroup, AVG(input_daily.dividends) AS avgdividend;
+
+
+========ORDER ================
+
+input_daily= LOAD 'NYSE_dividends' AS (exchange, stock, date, dividends);
+
+
+ordered = ORDER input_daily by dividends ;
+
+
+
+======LIMIT =========
+
+
+topNrecords= LIMIT ordered 10;
+
+
+
+=====Working with maps ===========
+
+[Rob#Pike,Bill#Gates,Sam#Anderson,Pit#Bull]
+[Bill#Gates]
+[Marissa#Meyer,Narayana#Murthy,Ratan#Tata]
+[Jeff#Bezos,Paul#Wilkison]
+
+lines = load 'sample_maps.txt' as (M:[]) ;
+describe lines ;
+dump lines ;
+
+newlines = foreach lines generate $0#'Bill' ;
+describe newlines ;
+dump newlines ; 
+
+
+=========SIZE operator in PIG==============
+
+size = foreach newlines generate SIZE($0)
+
+
+
+
+
+
+
