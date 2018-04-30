@@ -1,0 +1,409 @@
+
+SET hive.metastore.warehouse.dir
+
+set hive.cli.print.current.db=true 
+
+1)
+
+
+drop database if exists nyse cascade ; 
+
+
+Note: Cascade will drop all tables (and the data)
+
+
+2)
+
+create database sunnyse location '/user/vinodh/sunhive' ;
+
+This statement is nothing but the location in the HDFS where the HIVE tables will store the data 
+
+3)
+
+use nyse ;
+
+4) Create table 
+
+create table nydiv (
+exchangename string,
+symbol string, 
+tradedate string, 
+profits float )
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n' ;
+
+
+Note : Now when the above table is created, a folder by name "nydiv" will be created in the /user/vinodh/hive location 
+however it will not have any data until we load the data into it. 
+
+
+5) Loading data into the above table nydiv 
+
+load data local inpath 'NYSE_dividends' overwrite into table nydiv ; 
+
+
+6)Check if the data has loaded correctly 
+
+select * from nydiv ; 
+
+7) Another way of creating tables 
+
+create database sample location '/user/vinodh/hive' ;
+
+
+create table if not exists sample.userdata (
+name string,
+age int, 
+country string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;
+
+8)How do to know in which database I am working in hive shell ?
+set hive.cli.print.current.db=true ;
+
+
+
+9) How to clone a table and load data into it from an existing table 
+
+create table nydiv_filtered as select * from nydiv where profits > 20 ; 
+
+10) Just to clone a duplicate table from an existing table 
+
+create table nyse_dup like nydiv ;
+
+
+11) Loading data into a cloned above table 
+
+insert overwrite table nyse_dup select * from nydiv ;
+
+Note: overwrite option is a MUST here ! 
+
+
+
+
+===============================================================================================
+
+EXTERNAL TABLES 
+===============================================================================================
+q)How to check if a table is external or managed ?
+describe extended <table name> ;
+
+q)
+
+create external table if not exists sample.userdata2 (
+name string,
+age int, 
+country string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;
+
+
+Note : A table will be created in the location '/home/vinodh/hive' as we have first used this path for DB creation 
+
+
+q)Load the data into this table and delete this table and check if data is present in HDFS 
+
+insert overwrite table userdata2 select * from userdata ;
+
+select * from userdata2 ;
+
+drop userdata2 ;
+
+hadoop fs -ls hive/userdata2
+
+
+q)After dropping the table, the data would still persist in the above path, how to create another external 
+table and directly point that to the existi
+
+
+create external table if not exists nydiv_ext(
+symbol string,
+cname string, 
+tradedate string,
+profits float)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE
+LOCATION '/user/vinodh/NYSE';
+
+
+In this way we need not have to explictly load the data into HIVE tables as the tables direclty point to the 
+place where data is existing in HDFS ! 
+
+Note: the name of the table is xxx 
+
+
+=============================================================================
+PARTITIONS & Managed tables  
+============================================================================
+1)
+create table if not exists sample1.people (
+id int,
+name string)
+PARTITIONED BY (country string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;
+
+
+Note: some of the important points while creating a partitioned table 
+a)The field mentioned in the partition i.e country must not be defined in the list of columns while creating a table. 
+b)The field in the partition 'country' must be the last column in the input file that will be loaded into HIVE table. 
+
+------loading data into partitioned tables 
+
+load data local inpath '/home/vinodh/pigdata/india.txt' overwrite into table people partition (country = 'India');
+load data local inpath '/home/vinodh/pigdata/india.txt' overwrite into table people partition (country = 'USA');
+
+
+
+q)Quering the partitioned table
+
+select * from people where country = 'USA' ;
+
+This will result in reading data only from one file containing the USA data.
+ 
+
+
+q)Setting hive to strict mode 
+
+SET hive.mapred.mode= strict 
+
+
+select * from people ; 
+
+
+This query will not work if mode is set to strict since HIVE needs to create heavy weight MR jobs to query the whole table 
+even if its partitioned, this will force the user to selectively query the table using the where clause. 
+
+NOTE : setting this parameter does not prevent using "select * from" the normal tables, i.e the non partitioned tables ! 
+
+q) How to see all the partiotions in the table 
+
+show partitions <table name>
+
+
+q)Alternate way of loading data into partitioned tables 
+*************************************************************
+insert overwrite table people2 partition(country='India') select id,name from people limit 4 ;
+
+OR 
+
+insert overwrite table people2 partition(country='India') select id,name from people where country='India' ;
+
+q)How to load data into multiple partitions at the same time 
+
+from <source table name>
+insert overwrite <dest table> partition(country='India')
+select id, name where country='India'
+insert overwrite <dest table> partition(country='USA')
+select id, name where country='USA' 
+insert overwrite <dest table> partition(country='USA')
+select id, name where country='Australia' ;
+
+
+We can now execute the above query can be executed as a whole for a parallel data loading into multiple columns 
+
+
+
+
+
+
+========================================================================================
+PARTITIONS AND EXTERNAL TABLES ! 
+=======================================================================================
+
+Q)How to create an external partitioned table and load data into it ?
+
+create database sample_ext location '/user/vinodh/hive_ext'
+
+create external table if not exists people_ext (
+id int,
+name string)
+PARTITIONED BY (country string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE;
+
+load data local inpath '/home/vinodh/pigdata/usa.txt' overwrite into table sample.people_ext partition (country='USA') ;
+load data local inpath '/home/vinodh/pigdata/india.txt' into table people_ext partition (country='India');
+
+
+
+QSuppose I have data in HDFS, how do I point the external partitioned tables to that location ?
+
+
+
+A)Create the table as above but do not load the data in the usual way using the load command, instead use the alter table
+
+create external table if not exists xxx_ext2 (
+id int,
+name string)
+PARTITIONED BY (country string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE 
+LOCATION '/user/vinodh/sunhive/userdata2' ;
+
+
+alter table xxx_ext2  add partition(country='India')  ;
+
+
+alter table xxx_ext2  add partition(country='USA')  ;
+
+
+
+====================================================================================
+COLLECTION ITEMS LOADING 	
+------------------------------------------------------------------------------------
+create table if not exists sample1.siblings (
+name string,
+age int, 
+country string,
+brosis array<string>)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+COLLECTION ITEMS TERMINATED BY '#' 
+LINES TERMINATED BY '\n'
+STORED AS TEXTFILE;
+
+
+
+load data local inpath '/home/vinodh/pigdata/siblings.txt' overwrite into table siblings ;
+
+siblings.txt contents are as below 
+-----------------------------------
+Ram,43,India,Aryan#Devi#Sita
+Alice,55,USA,Alex#Tim
+Somu,22,India,Sham
+Ted,67,Australia,Kevin#Jincy#Tanya#Kate
+
+
+
+
+
+============================QUERYING DATA FROM HIVE================================
+
+
+Q)When is a MR job trigerred and when only a map only job ?
+A) Queries like 
+
+select * from <table>
+
+Does not trigger MR job but only a map only job however a MR job will be triggered for complex queries 
+involving aggregation operation 
+
+
+
+Q)
+select upper(<column name>), <column name>/1000 as <new column name> from <name of a table>
+
+Note: All arithmatic operations and logical operations can be performed (&, | , ^ , ~ )
+
+"as" keyword here is to rename a column 
+
+Q) CAST() : to perform a dynamic type cast 
+
+CAST(<name of the column> type of the data)
+
+
+eg 
+
+select name,CAST(marketcap AS STRING) from companies ;
+
+
+========================================================================
+TABLE generating functions (UDTF) user defined table generating funtion
+========================================================================
+
+Table generation functions, they convert a single input to zero or multiple o/p 
+
+----the explode() function 
+
+select explode(countries) as <new column name> from <database_name>.companies ;
+
+explode takes data from an array field and splits it into several rows and displayed on the screen 
+
+
+
+LATERAL VIEW
+-------------
+
+Suppose I have a table called siblings 
+siblings.txt contents are as below 
+-----------------------------------
+Ram,43,India,Aryan#Devi#Sita
+Alice,55,USA,Alex#Tim
+Somu,22,India,Sham
+Ted,67,Australia,Kevin#Jincy#Tanya#Kate
+
+
+Now I apply the query 
+
+select * from t2
+from siblings 
+lateral view explode(brosis) new_table as t2
+
+
+Note: t2 is called column alias and new_table is the name of the table (virtual table) where the results of explode 
+will be held 
+
+
+
+-----using multiple lateral views------------------
+This part is ignored for now being ! 
+
+
+
+
+========================Some of the built in functions in HIVE==========================
+
+CASE STATEMENT (similar to IF ...in normal program) 
+
+select case when age > 40 then "mid" else "young" end, name, country from siblings where country = 'India' ;
+
+
+Using multiple when clauses in the case statement 
+
+
+select case 
+when (age > 20 AND age < 30) then "mid"
+when (age < 20)  then "young"
+else "old" end ,
+name, country from siblings ;  
+
+
+------------------------------------------------------------------------
+GROUP BY on the siblings table 
+----------------------------------------------------------------------
+select count(*), country from siblings group by country   ;
+
+
+
+***********************************************************************
+ADD more queries by EOD Monday to create more queries for HIVE 
+
+************************************************************************
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,195 @@
+***************************
+
+
+create table nydiv (
+exchangename string,
+symbol string, 
+tradedate string, 
+profits float )
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+LINES TERMINATED BY '\n' ;
+
+
+load data local inpath '/home/vinodh/pigdata/NYSE_dividends' into table 
+nydiv ;
+
+
+***************************
+
+================================VIEWS============================
+use nyse ;
+
+create table temp_mytabl as select * from nydiv where profits > 0.3 ;
+create view filtered_nydiv as select * from nydiv where profits > 0.3 ; 
+
+select * from filtered_nydiv ; 
+
+
+To drop the view , 
+di
+drop view filtered_nydiv ;
+
+show tables ; 
+
+This will list filtered_nydiv ;
+
+describe formatted <name of the table > 
+
+The table view will be displayed as "virtual view"
+
+=========================
+
+Q)Where is the data for the view filtered_nydiv saved ?
+A)In the parent table 
+
+
+
+==========================================================
+JOIN
+==========================================================
+create table custdata (
+id int,
+name string )
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ' '
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE; 
+
+create table custsales (
+orderid string,
+id int,
+amount float )
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ' '
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE; 
+
+
+load data local inpath '/home/vinodh/pigdata/custsales.txt' into table custsales ;
+
+load data local inpath '/home/vinodh/pigdata/custid.txt' into table custdata ;
+
+
+SELECT cs.id, cd.name, cs.amount
+FROM  custsales cs JOIN custdata cd 
+ON (cs.id = cd.id);
+
+
+
+create table joined_data as 
+SELECT cs.id, cd.name, cs.amount
+FROM  custsales cs JOIN custdata cd 
+ON (cs.id = cd.id) ;
+
+
+*** Note: We can output the result of a join into another table or a join 
+
+created table joined_cust as 
+
+---------------------------------------------------------------------
+USING logical operators like AND (since OR is not permitted) in joins 
+---------------------------------------------------------------------
+create table custaddress (
+id int,
+city string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ' '
+LINES TERMINATED BY '\n' 
+STORED AS TEXTFILE; 
+
+
+select cd.id, cd.name, cs.amount  
+from custsales cs join custdata cd 
+on (cs.id = cd.id) AND cs.amount > 10000;
+
+Note: Instead of AND, we can also use a where clause 
+
+
+select cd.id, cd.name, cs.amount  
+from custsales cs join custdata cd 
+on (cs.id = cd.id) where cs.amount > 10000;
+
+
+
+q)Now what is the difference between the two (where and AND) ?
+A)
+
+select cd.id, cd.name, cs.amount  
+from custsales cs join custdata cd 
+on (cs.id = cd.id) where  (cs.amount > 3000 AND cd.name = 'Vinod');
+
+
+Note : the where clause will be applied on the final joined table ! 
+
+
+q) OUTER JOIN 
+
+select cd.id, cd.name, cs.amount  
+from custsales cs left outer join custdata cd 
+on (cs.id = cd.id) ; 
+
+====================================================================
+FILE storage format in HIVE 
+
+
+1)Storing the file as sequence files (binary key value pairs) most preffered file format and 
+it can also be stored in seq file format 
+
+
+
+create table nydiv2 (
+exchange string,
+symbol string,
+tradedate string, 
+profits float)
+row format delimited
+fields terminated by '\t'
+lines terminated by '\n'
+stored as sequencefile ;
+
+
+describe nydiv2
+
+
+
+
+========================================================================
+Note: Just like we have sequence files, we can store it as RC files 
+
+
+create table nydivRC (
+exchange string,
+symbol string,
+tradedate string, 
+profits float)
+row format delimited
+fields terminated by '\t'
+lines terminated by '\n'
+stored as rcfile;
+
+Note: We cannot use the regular load table command to load the data into an RC file format table, instead we have to load the data using the data existing in a table (which usually is loaded using text file)
+
+
+insert overwrite table nydivRC select * from nydiv ;
+
+insert overwrite table nydiv2 select * from nydiv ;
+
+
+==========================================================================
+Bucketing ---------------
+
+create table nydiv_buck (
+exchange string,
+symbol string,
+tradedate string, 
+profits float)
+clustered by (symbol) into 3 buckets
+row format delimited
+fields terminated by '\t'
+lines terminated by '\n' ;
+
+SET hive.enforce.bucketing = true ;
+
+
+insert into table nydiv_buck select * from nydiv ;
